@@ -14,7 +14,10 @@ import {
 } from 'react-native/Libraries/ReactPrivate/ReactNativePrivateInterface';
 import isArray from 'shared/isArray';
 
-import {enableAddPropertiesFastPath} from 'shared/ReactFeatureFlags';
+import {
+  enableAddPropertiesFastPath,
+  enableShallowPropDiffing,
+} from 'shared/ReactFeatureFlags';
 
 import type {AttributeConfiguration} from './ReactNativeTypes';
 
@@ -342,7 +345,7 @@ function diffProperties(
     // Pattern match on: attributeConfig
     if (typeof attributeConfig !== 'object') {
       // case: !Object is the default case
-      if (defaultDiffer(prevProp, nextProp)) {
+      if (enableShallowPropDiffing || defaultDiffer(prevProp, nextProp)) {
         // a normal leaf has changed
         (updatePayload || (updatePayload = ({}: {[string]: $FlowFixMe})))[
           propKey
@@ -354,6 +357,7 @@ function diffProperties(
     ) {
       // case: CustomAttributeConfiguration
       const shouldUpdate =
+        enableShallowPropDiffing ||
         prevProp === undefined ||
         (typeof attributeConfig.diff === 'function'
           ? attributeConfig.diff(prevProp, nextProp)
@@ -460,10 +464,6 @@ function fastAddProperties(
   for (const propKey in props) {
     const prop = props[propKey];
 
-    if (prop === undefined) {
-      continue;
-    }
-
     const attributeConfig = ((validAttributes[
       propKey
     ]: any): AttributeConfiguration);
@@ -474,7 +474,14 @@ function fastAddProperties(
 
     let newValue;
 
-    if (typeof prop === 'function') {
+    if (prop === undefined) {
+      // Discard the prop if it was previously defined.
+      if (payload && payload[propKey] !== undefined) {
+        newValue = null;
+      } else {
+        continue;
+      }
+    } else if (typeof prop === 'function') {
       // A function prop. It represents an event handler. Pass it to native as 'true'.
       newValue = true;
     } else if (typeof attributeConfig !== 'object') {

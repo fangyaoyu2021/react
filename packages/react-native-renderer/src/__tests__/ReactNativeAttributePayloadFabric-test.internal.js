@@ -10,7 +10,7 @@
 
 const {diff, create} = require('../ReactNativeAttributePayloadFabric');
 
-describe('ReactNativeAttributePayload.create', () => {
+describe('ReactNativeAttributePayloadFabric.create', () => {
   it('should work with simple example', () => {
     expect(create({b: 2, c: 3}, {a: true, b: true})).toEqual({
       b: 2,
@@ -60,7 +60,16 @@ describe('ReactNativeAttributePayload.create', () => {
     });
   });
 
-  it('should ignore fields that are set to undefined', () => {
+  it('should nullify previously defined style prop that is subsequently set to null or undefined', () => {
+    expect(
+      create({style: [{a: 0}, {a: undefined}]}, {style: {a: true}}),
+    ).toEqual({a: null});
+    expect(create({style: [{a: 0}, {a: null}]}, {style: {a: true}})).toEqual({
+      a: null,
+    });
+  });
+
+  it('should ignore non-style fields that are set to undefined', () => {
     expect(create({}, {a: true})).toEqual(null);
     expect(create({a: undefined}, {a: true})).toEqual(null);
     expect(create({a: undefined, b: undefined}, {a: true, b: true})).toEqual(
@@ -171,7 +180,7 @@ describe('ReactNativeAttributePayload.create', () => {
   });
 });
 
-describe('ReactNativeAttributePayload.diff', () => {
+describe('ReactNativeAttributePayloadFabric.diff', () => {
   it('should work with simple example', () => {
     expect(diff({a: 1, c: 3}, {b: 2, c: 3}, {a: true, b: true})).toEqual({
       a: null,
@@ -201,6 +210,7 @@ describe('ReactNativeAttributePayload.diff', () => {
     expect(diff({a: 1}, {b: 2}, {})).toEqual(null);
   });
 
+  // @gate !enableShallowPropDiffing
   it('should use the diff attribute', () => {
     const diffA = jest.fn((a, b) => true);
     const diffB = jest.fn((a, b) => false);
@@ -225,6 +235,7 @@ describe('ReactNativeAttributePayload.diff', () => {
     expect(diffB).not.toBeCalled();
   });
 
+  // @gate !enableShallowPropDiffing
   it('should do deep diffs of Objects by default', () => {
     expect(
       diff(
@@ -422,6 +433,7 @@ describe('ReactNativeAttributePayload.diff', () => {
     ).toEqual(null);
   });
 
+  // @gate !enableShallowPropDiffing
   it('should skip deeply-nested changed functions', () => {
     expect(
       diff(
