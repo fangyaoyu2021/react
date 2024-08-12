@@ -11,7 +11,7 @@ import {CompilerError, CompilerErrorDetailOptions} from '../CompilerError';
 import {assertExhaustive} from '../Utils/utils';
 import {Environment, ReactFunctionType} from './Environment';
 import {HookKind} from './ObjectShape';
-import {Type} from './Types';
+import {Type, makeType} from './Types';
 
 /*
  * *******************************************************************************************
@@ -1076,10 +1076,10 @@ export type FunctionExpression = {
   kind: 'FunctionExpression';
   name: string | null;
   loweredFunc: LoweredFunction;
-  expr:
-    | t.ArrowFunctionExpression
-    | t.FunctionExpression
-    | t.FunctionDeclaration;
+  type:
+    | 'ArrowFunctionExpression'
+    | 'FunctionExpression'
+    | 'FunctionDeclaration';
   loc: SourceLocation;
 };
 
@@ -1174,11 +1174,19 @@ export type NonLocalBinding =
 
 // Represents a user-defined variable (has a name) or a temporary variable (no name).
 export type Identifier = {
-  /*
-   * unique value to distinguish a variable, since name is not guaranteed to
-   * exist or be unique
+  /**
+   * After EnterSSA, `id` uniquely identifies an SSA instance of a variable.
+   * Before EnterSSA, `id` matches `declarationId`.
    */
   id: IdentifierId;
+
+  /**
+   * Uniquely identifies a given variable in the original program. If a value is
+   * reassigned in the original program each reassigned value will have a distinct
+   * `id` (after EnterSSA), but they will still have the same `declarationId`.
+   */
+  declarationId: DeclarationId;
+
   // null for temporaries. name is primarily used for debugging.
   name: IdentifierName | null;
   // The range for which this variable is mutable
@@ -1205,6 +1213,21 @@ export type ValidIdentifierName = string & {
   [opaqueValidIdentifierName]: 'ValidIdentifierName';
 };
 
+export function makeTemporaryIdentifier(
+  id: IdentifierId,
+  loc: SourceLocation,
+): Identifier {
+  return {
+    id,
+    name: null,
+    declarationId: makeDeclarationId(id),
+    mutableRange: {start: makeInstructionId(0), end: makeInstructionId(0)},
+    scope: null,
+    type: makeType(),
+    loc,
+  };
+}
+
 /**
  * Creates a valid identifier name. This should *not* be used for synthesizing
  * identifier names: only call this method for identifier names that appear in the
@@ -1225,6 +1248,9 @@ export function makeIdentifierName(name: string): ValidatedIdentifier {
 
 /**
  * Given an unnamed identifier, promote it to a named identifier.
+ *
+ * Note: this uses the identifier's DeclarationId to ensure that all
+ * instances of the same declaration will have the same name.
  */
 export function promoteTemporary(identifier: Identifier): void {
   CompilerError.invariant(identifier.name === null, {
@@ -1235,7 +1261,7 @@ export function promoteTemporary(identifier: Identifier): void {
   });
   identifier.name = {
     kind: 'promoted',
-    value: `#t${identifier.id}`,
+    value: `#t${identifier.declarationId}`,
   };
 }
 
@@ -1246,6 +1272,9 @@ export function isPromotedTemporary(name: string): boolean {
 /**
  * Given an unnamed identifier, promote it to a named identifier, distinguishing
  * it as a value that needs to be capitalized since it appears in JSX element tag position
+ *
+ * Note: this uses the identifier's DeclarationId to ensure that all
+ * instances of the same declaration will have the same name.
  */
 export function promoteTemporaryJsxTag(identifier: Identifier): void {
   CompilerError.invariant(identifier.name === null, {
@@ -1256,7 +1285,7 @@ export function promoteTemporaryJsxTag(identifier: Identifier): void {
   });
   identifier.name = {
     kind: 'promoted',
-    value: `#T${identifier.id}`,
+    value: `#T${identifier.declarationId}`,
   };
 }
 
@@ -1495,6 +1524,23 @@ export function makeIdentifierId(id: number): IdentifierId {
 }
 
 /*
+ * Simulated opaque type for IdentifierId to prevent using normal numbers as ids
+ * accidentally.
+ */
+const opageDeclarationId = Symbol();
+export type DeclarationId = number & {[opageDeclarationId]: 'DeclarationId'};
+
+export function makeDeclarationId(id: number): DeclarationId {
+  CompilerError.invariant(id >= 0 && Number.isInteger(id), {
+    reason: 'Expected declaration id to be a non-negative integer',
+    description: null,
+    loc: null,
+    suggestions: null,
+  });
+  return id as DeclarationId;
+}
+
+/*
  * Simulated opaque type for InstructionId to prevent using normal numbers as ids
  * accidentally.
  */
@@ -1582,6 +1628,12 @@ export function isUseInsertionEffectHookType(id: Identifier): boolean {
   return (
     id.type.kind === 'Function' &&
     id.type.shapeId === 'BuiltInUseInsertionEffectHook'
+  );
+}
+
+export function isUseContextHookType(id: Identifier): boolean {
+  return (
+    id.type.kind === 'Function' && id.type.shapeId === 'BuiltInUseContextHook'
   );
 }
 

@@ -25,8 +25,10 @@ import {
   Terminal,
   VariableBinding,
   makeBlockId,
+  makeDeclarationId,
   makeIdentifierName,
   makeInstructionId,
+  makeTemporaryIdentifier,
   makeType,
 } from './HIR';
 import {printInstruction} from './PrintHIR';
@@ -110,6 +112,11 @@ export default class HIRBuilder {
   #exceptionHandlerStack: Array<BlockId> = [];
   parentFunction: NodePath<t.Function>;
   errors: CompilerError = new CompilerError();
+  /**
+   * Traversal context: counts the number of `fbt` tag parents
+   * of the current babel node.
+   */
+  fbtDepth: number = 0;
 
   get nextIdentifierId(): IdentifierId {
     return this.#env.nextIdentifierId;
@@ -177,14 +184,7 @@ export default class HIRBuilder {
 
   makeTemporary(loc: SourceLocation): Identifier {
     const id = this.nextIdentifierId;
-    return {
-      id,
-      name: null,
-      mutableRange: {start: makeInstructionId(0), end: makeInstructionId(0)},
-      scope: null,
-      type: makeType(),
-      loc,
-    };
+    return makeTemporaryIdentifier(id, loc);
   }
 
   #resolveBabelBinding(
@@ -306,6 +306,12 @@ export default class HIRBuilder {
   }
 
   resolveBinding(node: t.Identifier): Identifier {
+    if (node.name === 'fbt') {
+      CompilerError.throwTodo({
+        reason: 'Support local variables named "fbt"',
+        loc: node.loc ?? null,
+      });
+    }
     const originalName = node.name;
     let name = originalName;
     let index = 0;
@@ -315,6 +321,7 @@ export default class HIRBuilder {
         const id = this.nextIdentifierId;
         const identifier: Identifier = {
           id,
+          declarationId: makeDeclarationId(id),
           name: makeIdentifierName(name),
           mutableRange: {
             start: makeInstructionId(0),
@@ -886,16 +893,22 @@ export function createTemporaryPlace(
 ): Place {
   return {
     kind: 'Identifier',
-    identifier: {
-      id: env.nextIdentifierId,
-      mutableRange: {start: makeInstructionId(0), end: makeInstructionId(0)},
-      name: null,
-      scope: null,
-      type: makeType(),
-      loc,
-    },
+    identifier: makeTemporaryIdentifier(env.nextIdentifierId, loc),
     reactive: false,
     effect: Effect.Unknown,
     loc: GeneratedSource,
   };
+}
+
+/**
+ * Clones an existing Place, returning a new temporary Place that shares the
+ * same metadata properties as the original place (effect, reactive flag, type)
+ * but has a new, temporary Identifier.
+ */
+export function clonePlaceToTemporary(env: Environment, place: Place): Place {
+  const temp = createTemporaryPlace(env, place.loc);
+  temp.effect = place.effect;
+  temp.identifier.type = place.identifier.type;
+  temp.reactive = place.reactive;
+  return temp;
 }

@@ -56,7 +56,7 @@ import {
   flattenReactiveLoops,
   flattenScopesWithHooksOrUse,
   inferReactiveScopeVariables,
-  memoizeFbtOperandsInSameScope,
+  memoizeFbtAndMacroOperandsInSameScope,
   mergeOverlappingReactiveScopes,
   mergeReactiveScopesThatInvalidateTogether,
   promoteUsedTemporaries,
@@ -77,7 +77,11 @@ import {flattenScopesWithHooksOrUseHIR} from '../ReactiveScopes/FlattenScopesWit
 import {pruneAlwaysInvalidatingScopes} from '../ReactiveScopes/PruneAlwaysInvalidatingScopes';
 import pruneInitializationDependencies from '../ReactiveScopes/PruneInitializationDependencies';
 import {stabilizeBlockIds} from '../ReactiveScopes/StabilizeBlockIds';
-import {eliminateRedundantPhi, enterSSA, leaveSSA} from '../SSA';
+import {
+  eliminateRedundantPhi,
+  enterSSA,
+  rewriteInstructionKindsBasedOnReassignment,
+} from '../SSA';
 import {inferTypes} from '../TypeInference';
 import {
   logCodegenFunction,
@@ -98,6 +102,8 @@ import {
 } from '../Validation';
 import {validateLocalsNotReassignedAfterRender} from '../Validation/ValidateLocalsNotReassignedAfterRender';
 import {outlineFunctions} from '../Optimization/OutlineFunctions';
+import {propagatePhiTypes} from '../TypeInference/PropagatePhiTypes';
+import {lowerContextAccess} from '../Optimization/LowerContextAccess';
 
 export type CompilerPipelineValue =
   | {kind: 'ast'; name: string; value: CodegenFunction}
@@ -127,11 +133,11 @@ export function* run(
     code,
     useMemoCacheIdentifier,
   );
-  yield {
+  yield log({
     kind: 'debug',
     name: 'EnvironmentConfig',
     value: prettyFormat(env.config),
-  };
+  });
   const ast = yield* runWithEnvironment(func, env);
   return ast;
 }
@@ -199,6 +205,10 @@ function* runWithEnvironment(
     validateNoCapitalizedCalls(hir);
   }
 
+  if (env.config.lowerContextAccess) {
+    lowerContextAccess(hir, env.config.lowerContextAccess);
+  }
+
   analyseFunctions(hir);
   yield log({kind: 'hir', name: 'AnalyseFunctions', value: hir});
 
@@ -237,14 +247,32 @@ function* runWithEnvironment(
   inferReactivePlaces(hir);
   yield log({kind: 'hir', name: 'InferReactivePlaces', value: hir});
 
-  leaveSSA(hir);
-  yield log({kind: 'hir', name: 'LeaveSSA', value: hir});
+  rewriteInstructionKindsBasedOnReassignment(hir);
+  yield log({
+    kind: 'hir',
+    name: 'RewriteInstructionKindsBasedOnReassignment',
+    value: hir,
+  });
+
+  propagatePhiTypes(hir);
+  yield log({
+    kind: 'hir',
+    name: 'PropagatePhiTypes',
+    value: hir,
+  });
 
   inferReactiveScopeVariables(hir);
   yield log({kind: 'hir', name: 'InferReactiveScopeVariables', value: hir});
 
+  const fbtOperands = memoizeFbtAndMacroOperandsInSameScope(hir);
+  yield log({
+    kind: 'hir',
+    name: 'MemoizeFbtAndMacroOperandsInSameScope',
+    value: hir,
+  });
+
   if (env.config.enableFunctionOutlining) {
-    outlineFunctions(hir);
+    outlineFunctions(hir, fbtOperands);
     yield log({kind: 'hir', name: 'OutlineFunctions', value: hir});
   }
 
@@ -259,13 +287,6 @@ function* runWithEnvironment(
   yield log({
     kind: 'hir',
     name: 'AlignObjectMethodScopes',
-    value: hir,
-  });
-
-  const fbtOperands = memoizeFbtOperandsInSameScope(hir);
-  yield log({
-    kind: 'hir',
-    name: 'MemoizeFbtAndMacroOperandsInSameScope',
     value: hir,
   });
 

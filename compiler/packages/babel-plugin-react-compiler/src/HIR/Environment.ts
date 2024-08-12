@@ -238,6 +238,7 @@ const EnvironmentConfigSchema = z.object({
    * this option to the empty array.
    */
   validateNoCapitalizedCalls: z.nullable(z.array(z.string())).default(null),
+  validateBlocklistedImports: z.nullable(z.array(z.string())).default(null),
 
   /*
    * When enabled, the compiler assumes that hooks follow the Rules of React:
@@ -434,6 +435,28 @@ const EnvironmentConfigSchema = z.object({
    * Here the variables `ref` and `myRef` will be typed as Refs.
    */
   enableTreatRefLikeIdentifiersAsRefs: z.boolean().nullable().default(false),
+
+  /*
+   * If specified a value, the compiler lowers any calls to `useContext` to use
+   * this value as the callee.
+   *
+   * A selector function is compiled and passed as an argument along with the
+   * context to this function call.
+   *
+   * The compiler automatically figures out the keys by looking for the immediate
+   * destructuring of the return value from the useContext call. In the future,
+   * this can be extended to different kinds of context access like property
+   * loads and accesses over multiple statements as well.
+   *
+   * ```
+   * // input
+   * const {foo, bar} = useContext(MyContext);
+   *
+   * // output
+   * const {foo, bar} = useCompiledContext(MyContext, (c) => [c.foo, c.bar]);
+   * ```
+   */
+  lowerContextAccess: ExternalFunctionSchema.nullish(),
 });
 
 export type EnvironmentConfig = z.infer<typeof EnvironmentConfigSchema>;
@@ -463,6 +486,11 @@ export function parseConfigPragma(pragma: string): EnvironmentConfig {
         source: 'react-compiler-runtime',
         importSpecifierName: '$structuralCheck',
       };
+      continue;
+    }
+
+    if (key === 'customMacros' && val) {
+      maybeConfig[key] = [val];
       continue;
     }
 
@@ -525,6 +553,7 @@ export class Environment {
   config: EnvironmentConfig;
   fnType: ReactFunctionType;
   useMemoCacheIdentifier: string;
+  hasLoweredContextAccess: boolean;
 
   #contextIdentifiers: Set<t.Identifier>;
   #hoistedIdentifiers: Set<t.Identifier>;
@@ -548,6 +577,7 @@ export class Environment {
     this.useMemoCacheIdentifier = useMemoCacheIdentifier;
     this.#shapes = new Map(DEFAULT_SHAPES);
     this.#globals = new Map(DEFAULT_GLOBALS);
+    this.hasLoweredContextAccess = false;
 
     if (
       config.disableMemoizationForDebugging &&

@@ -21,14 +21,15 @@ const dynamicFlags: DynamicExportsType = (dynamicFlagsUntyped: any);
 export const {
   alwaysThrottleRetries,
   enableAddPropertiesFastPath,
-  enableFastJSX,
+  enableFabricCompleteRootInCommitPhase,
   enableObjectFiber,
+  enablePersistedModeClonedFlag,
   enableShallowPropDiffing,
   passChildrenWhenCloningPersistedNodes,
+  enableLazyContextPropagation,
 } = dynamicFlags;
 
 // The rest of the flags are static for better dead code elimination.
-export const allowConcurrentByDefault = false;
 export const consoleManagedByDevToolsDuringStrictMode = true;
 export const debugRenderPhaseSideEffectsForStrictMode = __DEV__;
 export const disableClientCache = true;
@@ -58,7 +59,7 @@ export const enableFizzExternalRuntime = true;
 export const enableFlightReadableStream = true;
 export const enableGetInspectorDataForInstanceInProduction = true;
 export const enableInfiniteRenderLoopDetection = true;
-export const enableLazyContextPropagation = false;
+export const enableContextProfiling = false;
 export const enableLegacyCache = false;
 export const enableLegacyFBSupport = false;
 export const enableLegacyHidden = false;
@@ -82,11 +83,9 @@ export const enableTaint = true;
 export const enableTransitionTracing = false;
 export const enableTrustedTypesIntegration = false;
 export const enableUpdaterTracking = __PROFILE__;
-export const enableUseDeferredValueInitialArg = true;
 export const enableUseEffectEventHook = false;
 export const enableUseMemoCacheHook = true;
 export const favorSafetyOverHydrationPerf = true;
-export const forceConcurrentByDefaultForTesting = false;
 export const renameElementSymbol = false;
 export const retryLaneExpirationMs = 5000;
 export const syncLaneExpirationMs = 250;

@@ -187,7 +187,6 @@ const skipFilter = new Set([
   'alias-nested-member-path-mutate',
   'concise-arrow-expr',
   'const-propagation-into-function-expression-global',
-  'declare-reassign-variable-in-function-declaration',
   'lambda-mutate-shadowed-object',
   'fbt/lambda-with-fbt',
   'recursive-function-expr',
@@ -398,6 +397,7 @@ const skipFilter = new Set([
   'deeply-nested-function-expressions-with-params',
   'readonly-object-method-calls',
   'readonly-object-method-calls-mutable-lambda',
+  'preserve-memo-validation/useMemo-with-refs.flow',
 
   // TODO: we probably want to always skip these
   'rules-of-hooks/rules-of-hooks-0592bd574811',
@@ -439,7 +439,6 @@ const skipFilter = new Set([
   'fbt/fbtparam-with-jsx-element-content',
   'fbt/fbtparam-text-must-use-expression-container',
   'fbt/fbtparam-with-jsx-fragment-value',
-  'fbt/fbt-preserve-jsxtext',
   'todo.useContext-mutate-context-in-callback',
   'loop-unused-let',
   'reanimated-no-memo-arg',
@@ -484,6 +483,9 @@ const skipFilter = new Set([
   'rules-of-hooks/rules-of-hooks-69521d94fa03',
 
   // bugs
+  'bug-renaming-jsx-tag-lowercase',
+  'fbt/bug-fbt-plural-multiple-function-calls',
+  'fbt/bug-fbt-plural-multiple-mixed-call-tag',
   'bug-invalid-hoisting-functionexpr',
   'original-reactive-scopes-fork/bug-nonmutating-capture-in-unsplittable-memo-block',
   'original-reactive-scopes-fork/bug-hoisted-declaration-with-scope',
@@ -501,7 +503,14 @@ const skipFilter = new Set([
   // needs to be executed as a module
   'meta-property',
 
-  'todo.invalid-nested-function-reassign-local-variable-in-effect',
+  // needs context lowering support in React
+  'todo.lower-context-access-property-load',
+  'todo.lower-context-access-nested-destructuring',
+  'todo.lower-context-access-mixed-array-obj',
+  'todo.lower-context-access-destructure-multiple',
+  'todo.lower-context-access-array-destructuring',
+  'lower-context-selector-simple',
+  'lower-context-acess-multiple',
 ]);
 
 export default skipFilter;
